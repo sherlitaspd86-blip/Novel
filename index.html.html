@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jelajah Kampung Adat Naga - 3D Adventure Learning Game</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Font (Inter & Poppins) -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', 'Inter', sans-serif;
+            user-select: none;
+            overflow: hidden;
+            background-color: #0f172a;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        /* Custom UI Glassmorphism & Aesthetics */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .gradient-btn {
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            transition: all 0.25s ease;
+        }
+        .gradient-btn:hover {
+            background: linear-gradient(135deg, #047857 0%, #059669 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px -5px rgba(16, 185, 129, 0.4);
+        }
+        .badge-glow {
+            box-shadow: 0 0 25px rgba(234, 179, 8, 0.5);
+        }
+        /* Speech Bubble Tail */
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 24px;
+            border-width: 10px 10px 0;
+            border-style: solid;
+            border-color: rgba(255, 255, 255, 0.95) transparent;
+            display: block;
+            width: 0;
+        }
+        /* Animations */
+        @keyframes bounce-slow {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        .animate-bounce-slow {
+            animation: bounce-slow 3s infinite ease-in-out;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(16, 185, 129, 0.5);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased h-screen w-screen relative select-none">
+
+    <!-- WebGL Canvas -->
+    <div id="canvas-container" class="absolute inset-0 z-0"></div>
+
+    <!-- UI LAYER OVERLAY -->
+    <div id="ui-container" class="relative z-10 w-full h-full pointer-events-none flex flex-col justify-between p-4 md:p-6">
+
+        <!-- HEADER / HUD TOP BAR -->
+        <header id="hud-top" class="w-full max-w-6xl mx-auto flex justify-between items-center opacity-0 transition-opacity duration-500">
+            <!-- Left: Character & Zone Title -->
+            <div class="glass-panel text-white p-3 md:px-5 md:py-3 rounded-2xl flex items-center gap-3 shadow-xl pointer-events-auto">
+                <div id="hud-avatar" class="w-12 h-12 rounded-full border-2 border-emerald-400 bg-slate-800 flex items-center justify-center text-2xl shadow-inner">
+                    🧑‍🌾
+                </div>
+                <div>
+                    <div class="text-xs text-emerald-400 font-semibold tracking-wider uppercase" id="hud-guide-name">Pemandu: Asep</div>
+                    <div class="text-sm md:text-lg font-bold truncate max-w-[180px] md:max-w-xs" id="hud-zone-title">Lokasi 1: Gerbang Kampung Naga</div>
+                </div>
+            </div>
+
+            <!-- Right: Score & Audio Toggle -->
+            <div class="flex items-center gap-3 pointer-events-auto">
+                <div class="glass-panel text-white px-4 py-2 rounded-2xl flex items-center gap-3 shadow-xl">
+                    <i class="fa-solid fa-trophy text-amber-400 text-xl animate-pulse"></i>
+                    <div>
+                        <div class="text-[10px] text-slate-300 uppercase font-bold tracking-wider">Total Skor</div>
+                        <div class="text-lg md:text-2xl font-extrabold text-amber-300 font-mono" id="hud-score">0 / 1000</div>
+                    </div>
+                </div>
+
+                <button id="btn-audio-toggle" onclick="toggleAudio()" class="glass-panel hover:bg-slate-700/60 text-white w-11 h-11 rounded-2xl flex items-center justify-center shadow-xl transition-all">
+                    <i class="fa-solid fa-volume-high text-emerald-400" id="audio-icon"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- FLOATING DIALOGUE BUBBLE (GUIDE TALK) -->
+        <div id="guide-dialogue-box" class="self-center my-auto max-w-lg w-full px-4 opacity-0 transition-all duration-500 transform translate-y-4 pointer-events-auto">
+            <div class="glass-card speech-bubble relative p-5 rounded-3xl shadow-2xl border-2 border-emerald-500/30">
+                <div class="flex items-start gap-4">
+                    <div class="text-3xl text-emerald-600 shrink-0 mt-1">
+                        <i class="fa-solid fa-comments"></i>
+                    </div>
+                    <div class="space-y-1">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-700" id="dialogue-speaker">Asep (Tour Guide)</h4>
+                        <p class="text-slate-700 font-medium text-sm md:text-base leading-relaxed" id="dialogue-text">
+                            Wilujeng sumping di Kampung Adat Naga! Hayu urang sasarengan ngajajah kaendahan alam jeung budayana.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FOOTER / PROGRESS BAR & ACTION CONTROLS -->
+        <footer id="hud-bottom" class="w-full max-w-4xl mx-auto flex flex-col items-center gap-3 opacity-0 transition-opacity duration-500">
+            <!-- Progress Steps -->
+            <div class="w-full glass-panel p-3 rounded-2xl pointer-events-auto flex items-center justify-between gap-2 shadow-xl">
+                <div class="flex-1 bg-slate-800/80 rounded-full h-3 overflow-hidden flex border border-slate-700">
+                    <div id="progress-bar-fill" class="bg-gradient-to-r from-emerald-500 to-teal-300 h-full w-[10%] transition-all duration-500"></div>
+                </div>
+                <span class="text-xs font-bold text-emerald-400 px-2" id="progress-text">Lokasi 1 dari 5</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- MODAL 1: START / CHARACTER SELECTION SCREEN -->
+    <div id="modal-start" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md transition-opacity duration-500">
+        <div class="glass-card max-w-2xl w-full p-6 md:p-8 rounded-3xl shadow-2xl border border-emerald-500/30 text-center space-y-6">
+            <div class="inline-block p-3 bg-emerald-100 rounded-2xl text-emerald-600 mb-1">
+                <i class="fa-solid fa-mountain-sun text-4xl"></i>
+            </div>
+            <div>
+                <span class="text-xs font-bold uppercase tracking-widest text-emerald-600 bg-emerald-100 px-3 py-1 rounded-full">Bahasa Sunda - SMP Kelas VIII / Fase D</span>
+                <h1 class="text-2xl md:text-4xl font-extrabold text-slate-800 mt-2">JELAJAH KAMPUNG ADAT NAGA</h1>
+                <p class="text-slate-600 text-sm md:text-base mt-2 max-w-lg mx-auto leading-relaxed">
+                    Petualangan edukasi 3D interaktif mengenal teks deskripsi, rumah panggung, tradisi, jeung kabeungharan budaya Kampung Adat Naga, Tasikmalaya.
+                </p>
+            </div>
+
+            <!-- Character Selection -->
+            <div class="space-y-3">
+                <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Pilih Pemandu Wisata Anjeun:</h3>
+                <div class="grid grid-cols-2 gap-4 max-w-md mx-auto">
+                    <!-- Character Asep -->
+                    <div id="card-char-asep" onclick="selectGuide('asep')" class="border-2 border-emerald-500 bg-emerald-50/80 rounded-2xl p-4 cursor-pointer transition-all hover:scale-105 shadow-md text-center group">
+                        <div class="w-16 h-16 mx-auto bg-slate-800 rounded-full flex items-center justify-center text-3xl mb-2 border-2 border-emerald-500 shadow-sm">
+                            🧑‍🌾
+                        </div>
+                        <h4 class="font-bold text-slate-800 group-hover:text-emerald-700">Asep</h4>
+                        <p class="text-xs text-slate-500 mt-1">Baju Pangsi & Iket Sunda</p>
+                    </div>
+
+                    <!-- Character Neng Sari -->
+                    <div id="card-char-sari" onclick="selectGuide('sari')" class="border-2 border-slate-200 hover:border-emerald-400 bg-white rounded-2xl p-4 cursor-pointer transition-all hover:scale-105 shadow-sm text-center group">
+                        <div class="w-16 h-16 mx-auto bg-pink-100 rounded-full flex items-center justify-center text-3xl mb-2 border-2 border-pink-400 shadow-sm">
+                            👩‍🌾
+                        </div>
+                        <h4 class="font-bold text-slate-800 group-hover:text-emerald-700">Neng Sari</h4>
+                        <p class="text-xs text-slate-500 mt-1">Kebaya & Kain Batik Sunda</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Student Name Input -->
+            <div class="max-w-md mx-auto text-left">
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nami Murid / Nama Siswa:</label>
+                <input type="text" id="input-student-name" placeholder="Tulis nami anjeun di dieu..." class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none font-medium text-slate-700">
+            </div>
+
+            <button onclick="startGame()" class="gradient-btn text-white font-bold text-lg px-8 py-3.5 rounded-2xl shadow-lg w-full max-w-md flex items-center justify-center gap-3 mx-auto">
+                <i class="fa-solid fa-play"></i> Mimiti Petualangan
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL 2: LITERACY / DESCRIPTIVE TEXT PANEL -->
+    <div id="modal-literacy" class="fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="glass-card max-w-2xl w-full p-6 md:p-8 rounded-3xl shadow-2xl border border-emerald-500/30 flex flex-col max-h-[90vh]">
+            <!-- Header -->
+            <div class="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
+                <div class="flex items-center gap-3">
+                    <span class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-lg" id="literacy-zone-num">1</span>
+                    <div>
+                        <span class="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Panel Informasi & Teks Deskripsi</span>
+                        <h3 class="text-lg md:text-xl font-bold text-slate-800" id="literacy-title">Gerbang Kampung Adat</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Descriptive Text Body -->
+            <div class="overflow-y-auto pr-2 space-y-4 text-slate-700 text-sm md:text-base leading-relaxed flex-1" id="literacy-content">
+                <!-- Text loaded dynamically -->
+            </div>
+
+            <!-- Audio & Action Buttons -->
+            <div class="pt-6 border-t border-slate-200 mt-4 flex flex-wrap items-center justify-between gap-3">
+                <button id="btn-read-tts" onclick="speakLiteracyText()" class="px-4 py-2.5 rounded-xl border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-semibold text-sm flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-volume-high"></i> <span id="tts-btn-label">Dengarkan Penjelasan</span>
+                </button>
+
+                <button onclick="startQuizForCurrentZone()" class="gradient-btn text-white font-bold px-6 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-md">
+                    Mulai Tantangan <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: QUIZ / QUESTION CARD -->
+    <div id="modal-quiz" class="fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="glass-card max-w-2xl w-full p-6 md:p-8 rounded-3xl shadow-2xl border border-emerald-500/30 space-y-5">
+            <!-- Question Progress & Score HUD -->
+            <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-slate-500">
+                <span class="bg-slate-100 px-3 py-1 rounded-full text-emerald-700" id="quiz-question-num">Soal 1 tina 10</span>
+                <span class="text-amber-600 bg-amber-50 px-3 py-1 rounded-full">+100 Poin</span>
+            </div>
+
+            <!-- Question Text -->
+            <h3 class="text-lg md:text-xl font-bold text-slate-800 leading-snug" id="quiz-question-text">
+                Kampung Adat Naga perenahna di...
+            </h3>
+
+            <!-- Options Grid -->
+            <div class="space-y-3" id="quiz-options-container">
+                <!-- Option buttons generated dynamically -->
+            </div>
+
+            <!-- Instant Feedback Box (Hidden initially) -->
+            <div id="quiz-feedback" class="hidden p-4 rounded-2xl border text-sm space-y-1 transition-all">
+                <div class="font-bold flex items-center gap-2" id="feedback-title"></div>
+                <div class="text-slate-600" id="feedback-desc"></div>
+            </div>
+
+            <!-- Next Button -->
+            <div class="flex justify-end pt-2">
+                <button id="btn-next-question" onclick="nextQuestion()" disabled class="bg-slate-300 text-slate-500 font-bold px-6 py-2.5 rounded-xl text-sm flex items-center gap-2 transition-all cursor-not-allowed">
+                    Teruskeun <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: GAME OVER / SUMMARY & CERTIFICATE SCREEN -->
+    <div id="modal-summary" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-500 overflow-y-auto">
+        <div class="glass-card max-w-2xl w-full p-6 md:p-8 rounded-3xl shadow-2xl border border-amber-400/40 text-center space-y-6 my-auto">
+            <div class="relative inline-block">
+                <div id="summary-badge-icon" class="w-24 h-24 mx-auto rounded-full bg-amber-100 border-4 border-amber-400 flex items-center justify-center text-5xl shadow-xl badge-glow">
+                    🏆
+                </div>
+            </div>
+
+            <div>
+                <span class="text-xs font-extrabold uppercase tracking-widest text-amber-600 bg-amber-50 px-4 py-1.5 rounded-full border border-amber-200">Gelar Pencapaian Budaya</span>
+                <h2 class="text-2xl md:text-4xl font-extrabold text-slate-800 mt-3" id="summary-badge-title">DUTA BUDAYA SUNDA</h2>
+                <p class="text-slate-600 text-sm mt-1" id="summary-student-display">Wilujeng ka [Nami Student]!</p>
+            </div>
+
+            <!-- Statistics Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <div class="text-xs text-slate-400 font-semibold uppercase">Total Poin</div>
+                    <div class="text-xl font-black text-emerald-600 mt-1" id="summary-total-score">1000</div>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <div class="text-xs text-slate-400 font-semibold uppercase">Jawaban Leres</div>
+                    <div class="text-xl font-black text-emerald-600 mt-1" id="summary-correct-count">10 / 10</div>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <div class="text-xs text-slate-400 font-semibold uppercase">Jawaban Salah</div>
+                    <div class="text-xl font-black text-rose-500 mt-1" id="summary-wrong-count">0</div>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <div class="text-xs text-slate-400 font-semibold uppercase">Akurasi</div>
+                    <div class="text-xl font-black text-indigo-600 mt-1" id="summary-accuracy">100%</div>
+                </div>
+            </div>
+
+            <p class="text-slate-600 text-sm italic max-w-md mx-auto" id="summary-message">
+                Anjeun parantos hasil ngajajah sakabéh wewengkon Kampung Adat Naga tur ngajaga tradisi Sunda kalawan saé pisan!
+            </p>
+
+            <!-- Buttons -->
+            <div class="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+                <button onclick="restartGame()" class="px-6 py-3 rounded-2xl border-2 border-slate-300 font-bold text-slate-700 hover:bg-slate-100 transition-all text-sm flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-rotate-right"></i> Main Deui
+                </button>
+                <button onclick="printCertificate()" class="gradient-btn text-white font-bold px-8 py-3 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-lg">
+                    <i class="fa-solid fa-file-arrow-down"></i> Cetak Sertifikat Pencapaian
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN JAVASCRIPT GAME ENGINE -->
+    <script>
+        /* ==========================================================================
+           1. GAME DATA & EDUCATIONAL CURRICULUM CONTENT
+           ========================================================================== */
+        const ZONES_DATA = [
+            {
+                id: 1,
+                title: "LOKASI 1: GERBANG KAMPUNG ADAT",
+                shortTitle: "Gerbang Kampung Naga",
+                cameraPos: { x: 0, y: 15, z: 45 },
+                cameraLookAt: { x: 0, y: 4, z: 0 },
+                guidePos: { x: 0, y: 0, z: 25 },
+                literacyTitle: "Gambaran Umum Kampung Adat Naga",
+                literacyText: `Kampung Adat Naga nyaéta salah sahiji kampung adat Sunda anu perenahna di Desa Neglasari, Kacamatan Salawu, Kabupatén Tasikmalaya, Jawa Barat. Kampung ieu ayana di lebak atawa lembur anu dikurilingan ku pasir-pasir jeung wahangan Ciwulan.<br><br>Ciri khas Kampung Naga nyaéta masarakatna anu tetep kukuh ngajaga tradisi jeung adat istiadat karuhun (nenek moyang) di tengah modernisasi. Tempatna asri, beresih, sarta jauh tina polusi kota. Pikeun anjog ka lokasi kampung, wisatawan kudu ngaliwatan ratusan hambalan (tangga) batu ka lebak.`,
+                questions: [
+                    {
+                        id: 1,
+                        question: "Kampung Adat Naga perenahna di...",
+                        options: [
+                            "Kacamatan Salawu, Kabupatén Tasikmalaya.",
+                            "Kacamatan Lembang, Kabupatén Bandung Barat.",
+                            "Kacamatan Cisolok, Kabupatén Sukabumi.",
+                            "Kacamatan Ciamis, Kabupatén Ciamis."
+                        ],
+                        key: 0,
+                        explanation: "Kampung Adat Naga administratifna aya di Desa Neglasari, Kacamatan Salawu, Kabupatén Tasikmalaya."
+                    },
+                    {
+                        id: 2,
+                        question: "Salah sahiji ciri anu ngajadikeun Kampung Adat Naga béda jeung lembur séjén nyaéta...",
+                        options: [
+                            "Masarakatna geus teu boga aturan adat.",
+                            "Wangunan imah jeung kahirupan masarakatna masih ngajaga tradisi karuhun.",
+                            "Sakabéh imahna mangrupa gedong jangkung.",
+                            "Masarakatna henteu boga pakasaban."
+                        ],
+                        key: 1,
+                        explanation: "Masarakat Kampung Naga tetep ngajaga norma adat, struktur imah tradisional, jeung tradisi karuhun."
+                    }
+                ]
+            },
+            {
+                id: 2,
+                title: "LOKASI 2: WEWENGKON IMAH ADAT",
+                shortTitle: "Wewengkon Imah Adat",
+                cameraPos: { x: -35, y: 12, z: 20 },
+                cameraLookAt: { x: -20, y: 3, z: 0 },
+                guidePos: { x: -22, y: 0, z: 5 },
+                literacyTitle: "Wangunan jeung Aturan Imah Adat",
+                literacyText: `Imah di Kampung Adat Naga ngabogaan bentuk panggung anu dijieun tina bahan-bahan alam. Témbokna dijieun tina anyaman awi (bilik), sedengkeun suhunan atawa hateupna dipasang tina ijuk atawa daun palem.<br><br>Aturan adat di Kampung Naga ngalarang masarakat ngawangun imah nganggo semén, bata, atawa tembok beton. Salian ti eta, arah imah kedah nyanghareup ka kaler atawa ka kidul (utara/selatan). Bentuk panggung ieu mangrupa kearifan lokal pikeun ngajaga sirkulasi hawa sarta nyegah bahaya gempa bumi.`,
+                questions: [
+                    {
+                        id: 3,
+                        question: "Wangunan imah tradisional di Kampung Naga umumna mangrupa...",
+                        options: [
+                            "Imah susun.",
+                            "Imah panggung.",
+                            "Imah gedong beton.",
+                            "Imah tina kaca."
+                        ],
+                        key: 1,
+                        explanation: "Sakabéh imah di Kampung Naga mangrupa imah panggung kaju jeung awi."
+                    },
+                    {
+                        id: 4,
+                        question: "Bahan anu biasa dipaké pikeun témbok imah tradisional Kampung Naga nyaéta...",
+                        options: [
+                            "Kaca jeung beusi.",
+                            "Semén jeung keramik.",
+                            "Anyaman awi atawa bilik.",
+                            "Plastik jeung aluminium."
+                        ],
+                        key: 2,
+                        explanation: "Témbok imah tradisional ngagunakeun bilik (anyaman awi) tanpa dicét sintetis."
+                    }
+                ]
+            },
+            {
+                id: 3,
+                title: "LOKASI 3: LEMBUR JEUNG KAHIRUPAN MASARAKAT",
+                shortTitle: "Lembur & Kahirupan",
+                cameraPos: { x: 25, y: 10, z: -10 },
+                cameraLookAt: { x: 5, y: 3, z: -20 },
+                guidePos: { x: 8, y: 0, z: -18 },
+                literacyTitle: "Tradisi jeung Kebiasaan Masarakat",
+                literacyText: `Masarakat Kampung Naga hirup sauyunan, gotong royong, tur taat kana aturan adat. Salah sahiji tradisi paling utama nyaéta upacara ritual "Hajat Sasih", nyaéta ritual syukur sarta ziarah ka makam karuhun anu dilaksanakeun dina bulan-bulan tartamtu dina alaman Islam.<br><br>Di lingkungan kampung oge aya Bale Patemon (tempat musyawarah) jeung Masjid. Kahirupan sapopoé dipimpin ku pemangku adat saperti Kuncen, Puun, jeung Punduh anu ngajaga katertiban tur kabersihan lingkungan.`,
+                questions: [
+                    {
+                        id: 5,
+                        question: "Salah sahiji tradisi anu dipiara ku masarakat Kampung Naga nyaéta...",
+                        options: [
+                            "Hajat Sasih.",
+                            "Ngaben.",
+                            "Karapan Sapi.",
+                            "Lompat Batu."
+                        ],
+                        key: 0,
+                        explanation: "Hajat Sasih nyaéta upacara adat utama di Kampung Naga pikeun mendoakeun karuhun."
+                    },
+                    {
+                        id: 6,
+                        question: "Dina kahirupan sapopoé, sikep anu kudu dimumulé ku masarakat Kampung Naga nyaéta...",
+                        options: [
+                            "Hirup individualis jeung teu paduli ka batur.",
+                            "Saling hormat, gotong royong, jeung taat kana aturan adat.",
+                            "Ngaruksak lingkungan pikeun kapentingan sorangan.",
+                            "Nolak sagala kagiatan babarengan."
+                        ],
+                        key: 1,
+                        explanation: "Gotong royong jeung silih hormat mangrupa pilar utama kahirupan sosial di Kampung Naga."
+                    }
+                ]
+            },
+            {
+                id: 4,
+                title: "LOKASI 4: SAWAH JEUNG KEBON",
+                shortTitle: "Sawah jeung Kebon",
+                cameraPos: { x: -30, y: 14, z: -40 },
+                cameraLookAt: { x: -10, y: 2, z: -50 },
+                guidePos: { x: -12, y: 0, z: -45 },
+                literacyTitle: "Mata Pencaharian Masarakat",
+                literacyText: `Sebagéan ageung masarakat Kampung Naga boga pakasaban utama salaku patani. Maranéhna ngolah sawah jeung kebon ngagunakeun cara-cara tradisional tanpa ngagunakeun bahan kimia anu ngaruksak taneuh.<br><br>Salian ti tatanén, warga oge ngamfaatkeun awi ti perbukitan pikeun nyieun pelbagai karajinan tangan (kerajinan anyaman awi) saperti boboko, cating, pipiti, jeung hiasan séjénna anu dijadikeun souvenir pikeun para wisatawan.`,
+                questions: [
+                    {
+                        id: 7,
+                        question: "Pakasaban utama sabagian masarakat Kampung Naga nyaéta...",
+                        options: [
+                            "Patani.",
+                            "Panambang minyak.",
+                            "Pelaut.",
+                            "Pagawe pabrik mobil."
+                        ],
+                        key: 0,
+                        explanation: "Mata pencaharian utama warga Kampung Naga nyaéta tatanén (bertani sawah & kebun)."
+                    },
+                    {
+                        id: 8,
+                        question: "Salian ti tatanén, salah sahiji pakasaban séjén masarakat Kampung Naga nyaéta...",
+                        options: [
+                            "Nyieun karajinan tina anyaman awi.",
+                            "Nyieun kapal laut.",
+                            "Ngolah tambang emas.",
+                            "Nyieun pesawat."
+                        ],
+                        key: 0,
+                        explanation: "Warga ogé ahli nyieun karajinan tangan anyaman awi pikeun panghasilan tambahan."
+                    }
+                ]
+            },
+            {
+                id: 5,
+                title: "LOKASI 5: LEUWEUNG LARANGAN",
+                shortTitle: "Leuweung Larangan",
+                cameraPos: { x: 30, y: 16, z: -70 },
+                cameraLookAt: { x: 10, y: 4, z: -85 },
+                guidePos: { x: 12, y: 0, z: -78 },
+                literacyTitle: "Aturan Adat jeung Pelestarian Leuweung Larangan",
+                literacyText: `Leuweung Larangan nyaéta wewengkon hutan tutupan anu dijaga pisan ku aturan adat Kampung Naga. Hutan ieu teu meunang diasupan, ditebang tangkalna, atawa diganggu ku saha waé tanpa izin khusus ti pemangku adat.<br><br>Tujuan Leuweung Larangan nyaéta pikeun ngajaga kasaimbangan alam, sumber cai resapan, sarta ngajaga habitat flora jeung fauna. Ieu bukti yen tradisi Sunda geus ti baheula ngajarkeun kearifan ekologis pikeun ngalestarikeun lingkungan alam.`,
+                questions: [
+                    {
+                        id: 9,
+                        question: "Naon anu dimaksud ku Leuweung Larangan di Kampung Naga?",
+                        options: [
+                            "Leuweung anu dijadikeun tempat wisata kaulinan.",
+                            "Leuweung anu meunang ditebang sakahayang.",
+                            "Wewengkon leuweung anu dijaga ku aturan adat sarta teu meunang diasupan sacara sambarangan.",
+                            "Leuweung anu dijadikeun tempat ngawangun imah."
+                        ],
+                        key: 2,
+                        explanation: "Leuweung Larangan nyaéta hutan lindung adat sakral anu teu meunang diruksak atawa dimasukan ku sembarangan jalma."
+                    },
+                    {
+                        id: 10,
+                        question: "Lamun urang keur aya di sabudeureun Leuweung Larangan, sikep anu kudu dilakukeun nyaéta...",
+                        options: [
+                            "Motong tangkal pikeun nyieun karajinan.",
+                            "Nyokot tatangkalan jeung sasatoan.",
+                            "Ngajaga aturan adat sarta henteu ngaruksak lingkungan.",
+                            "Ngaduruk runtah di jero leuweung."
+                        ],
+                        key: 2,
+                        explanation: "Wisatawan jeung warga kudu ngahormatan aturan adat ku cara ngajaga kabersihan jeung henteu ngaruksak Leuweung."
+                    }
+                ]
+            }
+        ];
+
+        /* ==========================================================================
+           2. STATE MANAGEMENT & GLOBALS
+           ========================================================================== */
+        let gameState = {
+            studentName: "Wisatawan",
+            selectedGuide: "asep", // 'asep' or 'sari'
+            currentZoneIndex: 0,
+            currentQuestionIndex: 0, // 0 to 9 global
+            score: 0,
+            correctCount: 0,
+            wrongCount: 0,
+            audioEnabled: true,
+            isQuizActive: false,
+            answeredCurrentQuestion: false
+        };
+
+        // Web Audio API Audio Context Synthesizer
+        let audioCtx = null;
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+        }
+
+        function playSound(type) {
+            if (!gameState.audioEnabled) return;
+            try {
+                initAudio();
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'correct') {
+                    // Happy High Chime
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(523.25, now); // C5
+                    osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.1); // E5
+                    osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.25); // G5
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                    osc.start(now);
+                    osc.stop(now + 0.4);
+                } else if (type === 'wrong') {
+                    // Sad Low Tone
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(220, now); // A3
+                    osc.frequency.linearRampToValueAtTime(164.81, now + 0.3); // E3
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+                    osc.start(now);
+                    osc.stop(now + 0.35);
+                } else if (type === 'click') {
+                    // Click Sound
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(200, now + 0.05);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                    osc.start(now);
+                    osc.stop(now + 0.05);
+                }
+            } catch(e) { console.log(e); }
+        }
+
+        function toggleAudio() {
+            gameState.audioEnabled = !gameState.audioEnabled;
+            const icon = document.getElementById('audio-icon');
+            if (gameState.audioEnabled) {
+                icon.className = "fa-solid fa-volume-high text-emerald-400";
+                playSound('click');
+            } else {
+                icon.className = "fa-solid fa-volume-xmark text-slate-400";
+                if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            }
+        }
+
+        /* Speech Synthesis for Literacy */
+        function speakLiteracyText() {
+            if (!('speechSynthesis' in window)) {
+                alert("Browser anjeun henteu ngadukung fitur Text-to-Speech.");
+                return;
+            }
+            window.speechSynthesis.cancel();
+            const btnLabel = document.getElementById('tts-btn-label');
+            
+            if (window.speechSynthesis.speaking) {
+                window.speechSynthesis.cancel();
+                btnLabel.innerText = "Dengarkan Penjelasan";
+                return;
+            }
+
+            const currentZone = ZONES_DATA[gameState.currentZoneIndex];
+            const cleanText = currentZone.literacyText.replace(/<br>/g, " ");
+            const utterance = new SpeechSynthesisUtterance(cleanText);
+            utterance.lang = 'id-ID'; // Indonesian accent for Sundanese text
+            utterance.rate = 0.9;
+
+            utterance.onstart = () => { btnLabel.innerText = "Ngeureunkeun Suara"; };
+            utterance.onend = () => { btnLabel.innerText = "Dengarkan Penjelasan"; };
+
+            window.speechSynthesis.speak(utterance);
+        }
+
+        /* ==========================================================================
+           3. THREE.JS 3D SCENE & ENVIRONMENT GENERATION
+           ========================================================================== */
+        let scene, camera, renderer;
+        let guideMeshGroup; // Tour guide avatar container
+        let targetCamPos = new THREE.Vector3(0, 15, 45);
+        let targetCamLookAt = new THREE.Vector3(0, 4, 0);
+        let currentCamLookAt = new THREE.Vector3(0, 4, 0);
+
+        // Guide animation states
+        let animClock = new THREE.Clock();
+        let guideParts = {}; // references to arms/legs for procedural walking
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb); // Sky blue
+            scene.fog = new THREE.FogExp2(0x87ceeb, 0.008);
+
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 15, 45);
+            camera.lookAt(0, 4, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // Lighting Setup
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xfffaed, 0.8);
+            sunLight.position.set(60, 100, 40);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 250;
+            const d = 80;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            scene.add(sunLight);
+
+            // Build Kampung Naga Landscape
+            buildTerrain();
+            buildRiver();
+            buildPaddyFields();
+            buildVillageHouses();
+            buildSacredForest();
+            buildVillageEntranceGate();
+            
+            // Build Guide Avatar
+            createGuideAvatar();
+
+            // Window resize handler
+            window.addEventListener('resize', onWindowResize, false);
+
+            // Render loop
+            animate();
+        }
+
+        /* 3D Landscape Builders */
+        function buildTerrain() {
+            // Main green valley ground
+            const groundGeo = new THREE.PlaneGeometry(300, 300, 32, 32);
+            const groundMat = new THREE.MeshLambertMaterial({ color: 0x4da64d });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -0.5;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Surrounding Hills (Low poly backdrop)
+            const hillGeo = new THREE.ConeGeometry(35, 45, 7);
+            const hillMat = new THREE.MeshLambertMaterial({ color: 0x2d6a37, flatShading: true });
+            
+            const hillPositions = [
+                {x: -90, z: -80}, {x: -110, z: -20}, {x: -85, z: 40},
+                {x: 90, z: -80}, {x: 105, z: -10}, {x: 80, z: 50},
+                {x: 0, z: -130}
+            ];
+
+            hillPositions.forEach(p => {
+                const hill = new THREE.Mesh(hillGeo, hillMat);
+                hill.position.set(p.x, 20, p.z);
+                hill.scale.set(1 + Math.random()*0.3, 1 + Math.random()*0.4, 1 + Math.random()*0.3);
+                scene.add(hill);
+            });
+        }
+
+        function buildRiver() {
+            // Ciwulan River curve along the side
+            const riverGeo = new THREE.PlaneGeometry(25, 300);
+            const riverMat = new THREE.MeshStandardMaterial({ 
+                color: 0x38bdf8, 
+                roughness: 0.1, 
+                metalness: 0.2, 
+                transparent: true, 
+                opacity: 0.85 
+            });
+            const river = new THREE.Mesh(riverGeo, riverMat);
+            river.rotation.x = -Math.PI / 2;
+            river.position.set(45, -0.3, 0);
+            scene.add(river);
+        }
+
+        function buildPaddyFields() {
+            // Terraced Rice Paddies
+            const paddyGeo = new THREE.BoxGeometry(25, 0.4, 35);
+            const paddyMat = new THREE.MeshLambertMaterial({ color: 0x84cc16 });
+            
+            const paddyCoords = [
+                {x: -45, z: -40}, {x: -45, z: -70}, {x: -50, z: 10}
+            ];
+
+            paddyCoords.forEach(c => {
+                const paddy = new THREE.Mesh(paddyGeo, paddyMat);
+                paddy.position.set(c.x, 0.2, c.z);
+                paddy.receiveShadow = true;
+                scene.add(paddy);
+
+                // Add tiny rice plant tufts
+                for (let i = 0; i < 15; i++) {
+                    const tuftGeo = new THREE.ConeGeometry(0.5, 1.2, 4);
+                    const tuftMat = new THREE.MeshLambertMaterial({ color: 0x65a30d });
+                    const tuft = new THREE.Mesh(tuftGeo, tuftMat);
+                    tuft.position.set(
+                        c.x + (Math.random() - 0.5) * 20,
+                        0.9,
+                        c.z + (Math.random() - 0.5) * 30
+                    );
+                    scene.add(tuft);
+                }
+            });
+        }
+
+        function buildHouse(x, z, rotationY = 0) {
+            const houseGroup = new THREE.Group();
+
+            // 1. Wooden Stilts (Imah Panggung Base)
+            const stiltGeo = new THREE.CylinderGeometry(0.2, 0.2, 2.5);
+            const stiltMat = new THREE.MeshLambertMaterial({ color: 0x5c3d1e });
+            const stiltPositions = [
+                {x: -2.8, z: -2.8}, {x: 2.8, z: -2.8},
+                {x: -2.8, z: 2.8}, {x: 2.8, z: 2.8}
+            ];
+            stiltPositions.forEach(sp => {
+                const stilt = new THREE.Mesh(stiltGeo, stiltMat);
+                stilt.position.set(sp.x, 1.25, sp.z);
+                stilt.castShadow = true;
+                houseGroup.add(stilt);
+            });
+
+            // 2. Bamboo Woven Wall Body (Bilik)
+            const wallGeo = new THREE.BoxGeometry(6, 4, 6);
+            const wallMat = new THREE.MeshLambertMaterial({ color: 0xd97706 }); // Warm bamboo gold
+            const walls = new THREE.Mesh(wallGeo, wallMat);
+            walls.position.y = 4.5;
+            walls.castShadow = true;
+            walls.receiveShadow = true;
+            houseGroup.add(walls);
+
+            // Door
+            const doorGeo = new THREE.PlaneGeometry(1.4, 2.6);
+            const doorMat = new THREE.MeshLambertMaterial({ color: 0x3f2305 });
+            const door = new THREE.Mesh(doorGeo, doorMat);
+            door.position.set(0, 3.8, 3.01);
+            houseGroup.add(door);
+
+            // 3. Black Ijuk / Thatch Roof
+            const roofGeo = new THREE.ConeGeometry(5.2, 3.5, 4);
+            const roofMat = new THREE.MeshLambertMaterial({ color: 0x27272a, flatShading: true }); // Dark Ijuk
+            const roof = new THREE.Mesh(roofGeo, roofMat);
+            roof.position.y = 8;
+            roof.rotation.y = Math.PI / 4;
+            roof.scale.set(1.1, 1, 1.1);
+            roof.castShadow = true;
+            houseGroup.add(roof);
+
+            houseGroup.position.set(x, 0, z);
+            houseGroup.rotation.y = rotationY;
+            scene.add(houseGroup);
+        }
+
+        function buildVillageHouses() {
+            // Zone 2 Cluster
+            buildHouse(-20, 0, Math.PI / 6);
+            buildHouse(-28, 12, -Math.PI / 8);
+            buildHouse(-18, 22, 0);
+
+            // Zone 3 Cluster (Bale Patemon & Main Village)
+            buildHouse(0, -25, 0);
+            buildHouse(-12, -22, Math.PI / 4);
+            buildHouse(12, -28, -Math.PI / 4);
+        }
+
+        function buildSacredForest() {
+            // Zone 5: Dense Trees & Bamboo Clumps (Leuweung Larangan)
+            const forestCenter = { x: 15, z: -85 };
+            
+            for (let i = 0; i < 35; i++) {
+                const treeGroup = new THREE.Group();
+                const trunkGeo = new THREE.CylinderGeometry(0.4, 0.7, 6);
+                const trunkMat = new THREE.MeshLambertMaterial({ color: 0x451a03 });
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.y = 3;
+                trunk.castShadow = true;
+                treeGroup.add(trunk);
+
+                // Deep dark green dense foliage
+                const foliageGeo = new THREE.DodecahedronGeometry(3 + Math.random() * 1.5);
+                const foliageMat = new THREE.MeshLambertMaterial({ color: 0x14532d, flatShading: true });
+                const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+                foliage.position.y = 7;
+                foliage.castShadow = true;
+                treeGroup.add(foliage);
+
+                const rx = forestCenter.x + (Math.random() - 0.5) * 45;
+                const rz = forestCenter.z + (Math.random() - 0.5) * 45;
+                treeGroup.position.set(rx, 0, rz);
+                scene.add(treeGroup);
+            }
+        }
+
+        function buildVillageEntranceGate() {
+            // Zone 1 Gate Pillar Stairs
+            const pillarGeo = new THREE.BoxGeometry(1.5, 6, 1.5);
+            const pillarMat = new THREE.MeshLambertMaterial({ color: 0x78350f });
+
+            const leftPillar = new THREE.Mesh(pillarGeo, pillarMat);
+            leftPillar.position.set(-6, 3, 30);
+            scene.add(leftPillar);
+
+            const rightPillar = new THREE.Mesh(pillarGeo, pillarMat);
+            rightPillar.position.set(6, 3, 30);
+            scene.add(rightPillar);
+
+            // Top Arch
+            const archGeo = new THREE.BoxGeometry(15, 1, 1.8);
+            const arch = new THREE.Mesh(archGeo, pillarMat);
+            arch.position.set(0, 6.5, 30);
+            scene.add(arch);
+        }
+
+        /* Procedural 3D Character Guide Avatar */
+        function createGuideAvatar() {
+            guideMeshGroup = new THREE.Group();
+
+            // Head
+            const headGeo = new THREE.SphereGeometry(0.8, 16, 16);
+            const skinMat = new THREE.MeshLambertMaterial({ color: 0xfbcfe8 }); // Soft skin
+            const head = new THREE.Mesh(headGeo, skinMat);
+            head.position.y = 3.6;
+            guideMeshGroup.add(head);
+
+            // Headwear (Iket Sunda for Asep / Hair Bun for Neng Sari)
+            const iketGeo = new THREE.CylinderGeometry(0.85, 0.85, 0.3, 16);
+            const iketMat = new THREE.MeshLambertMaterial({ 
+                color: gameState.selectedGuide === 'asep' ? 0x1e293b : 0xd97706 
+            });
+            const iket = new THREE.Mesh(iketGeo, iketMat);
+            iket.position.y = 4.0;
+            guideMeshGroup.add(iket);
+            guideParts.headwearMat = iketMat;
+
+            // Torso (Black Pangsi / Kebaya)
+            const torsoGeo = new THREE.CylinderGeometry(0.7, 0.8, 1.8, 16);
+            const torsoMat = new THREE.MeshLambertMaterial({ 
+                color: gameState.selectedGuide === 'asep' ? 0x0f172a : 0xdb2777 
+            });
+            const torso = new THREE.Mesh(torsoGeo, torsoMat);
+            torso.position.y = 2.4;
+            torso.castShadow = true;
+            guideMeshGroup.add(torso);
+            guideParts.torsoMat = torsoMat;
+
+            // Arms (Left & Right)
+            const armGeo = new THREE.CylinderGeometry(0.2, 0.2, 1.4);
+            
+            const leftArm = new THREE.Mesh(armGeo, torsoMat);
+            leftArm.position.set(-1.0, 2.4, 0);
+            guideMeshGroup.add(leftArm);
+            guideParts.leftArm = leftArm;
+
+            const rightArm = new THREE.Mesh(armGeo, torsoMat);
+            rightArm.position.set(1.0, 2.4, 0);
+            guideMeshGroup.add(rightArm);
+            guideParts.rightArm = rightArm;
+
+            // Legs
+            const legGeo = new THREE.CylinderGeometry(0.25, 0.25, 1.6);
+            const legMat = new THREE.MeshLambertMaterial({ 
+                color: gameState.selectedGuide === 'asep' ? 0x0f172a : 0x78350f 
+            });
+            
+            const leftLeg = new THREE.Mesh(legGeo, legMat);
+            leftLeg.position.set(-0.4, 0.8, 0);
+            leftLeg.castShadow = true;
+            guideMeshGroup.add(leftLeg);
+            guideParts.leftLeg = leftLeg;
+
+            const rightLeg = new THREE.Mesh(legGeo, legMat);
+            rightLeg.position.set(0.4, 0.8, 0);
+            rightLeg.castShadow = true;
+            guideMeshGroup.add(rightLeg);
+            guideParts.rightLeg = rightLeg;
+
+            // Position at initial location
+            guideMeshGroup.position.set(0, 0, 25);
+            scene.add(guideMeshGroup);
+        }
+
+        function updateGuideAppearance() {
+            if (!guideParts.torsoMat) return;
+            if (gameState.selectedGuide === 'asep') {
+                guideParts.headwearMat.color.setHex(0x1e293b); // Black Iket
+                guideParts.torsoMat.color.setHex(0x0f172a);   // Black Pangsi
+            } else {
+                guideParts.headwearMat.color.setHex(0xd97706); // Batik accent
+                guideParts.torsoMat.color.setHex(0xdb2777);   // Pink Kebaya
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = animClock.getElapsedTime();
+
+            // Smooth Camera Movement to current zone target
+            camera.position.lerp(targetCamPos, 0.04);
+            currentCamLookAt.lerp(targetCamLookAt, 0.04);
+            camera.lookAt(currentCamLookAt);
+
+            // Procedural Avatar Idle & Waving Animation
+            if (guideParts.rightArm) {
+                guideParts.rightArm.rotation.z = Math.sin(time * 3) * 0.2 + 0.3;
+                guideParts.leftArm.rotation.z = -Math.sin(time * 3) * 0.2 - 0.3;
+                guideMeshGroup.position.y = Math.sin(time * 2) * 0.1;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /* ==========================================================================
+           4. GAME FLOW & NAVIGATION LOGIC
+           ========================================================================== */
+        function selectGuide(guideKey) {
+            gameState.selectedGuide = guideKey;
+            playSound('click');
+            
+            const cardAsep = document.getElementById('card-char-asep');
+            const cardSari = document.getElementById('card-char-sari');
+
+            if (guideKey === 'asep') {
+                cardAsep.className = "border-2 border-emerald-500 bg-emerald-50/80 rounded-2xl p-4 cursor-pointer transition-all hover:scale-105 shadow-md text-center group";
+                cardSari.className = "border-2 border-slate-200 hover:border-emerald-400 bg-white rounded-2xl p-4 cursor-pointer transition-all hover:scale-105 shadow-sm text-center group";
+            } else {
+                cardSari.className = "border-2 border-pink-500 bg-pink-50/80 rounded-2xl p-4 cursor-pointer transition-all hover:scale-105 shadow-md text-center group";
+                cardAsep.className = "border-2 border-slate-200 hover:border-emerald-400 bg-white rounded-2xl p-4 cursor-pointer transition-all hover:scale-105 shadow-sm text-center group";
+            }
+
+            updateGuideAppearance();
+        }
+
+        function startGame() {
+            const nameInput = document.getElementById('input-student-name').value.trim();
+            if (nameInput) {
+                gameState.studentName = nameInput;
+            }
+            playSound('click');
+
+            // Update HUD elements
+            document.getElementById('hud-guide-name').innerText = `Pemandu: ${gameState.selectedGuide === 'asep' ? 'Asep' : 'Neng Sari'}`;
+            document.getElementById('hud-avatar').innerText = gameState.selectedGuide === 'asep' ? '🧑‍🌾' : '👩‍🌾';
+            document.getElementById('dialogue-speaker').innerText = `${gameState.selectedGuide === 'asep' ? 'Asep' : 'Neng Sari'} (Tour Guide)`;
+
+            // Hide Start Screen
+            const modalStart = document.getElementById('modal-start');
+            modalStart.classList.add('opacity-0', 'pointer-events-none');
+            
+            // Show Top HUD
+            document.getElementById('hud-top').classList.remove('opacity-0');
+            document.getElementById('hud-bottom').classList.remove('opacity-0');
+
+            // Load Zone 1
+            loadZone(0);
+        }
+
+        function loadZone(zoneIdx) {
+            gameState.currentZoneIndex = zoneIdx;
+            const zoneData = ZONES_DATA[zoneIdx];
+
+            // 1. Smooth Camera Transition
+            targetCamPos.set(zoneData.cameraPos.x, zoneData.cameraPos.y, zoneData.cameraPos.z);
+            targetCamLookAt.set(zoneData.cameraLookAt.x, zoneData.cameraLookAt.y, zoneData.cameraLookAt.z);
+
+            // 2. Move Guide Avatar to location
+            if (guideMeshGroup) {
+                guideMeshGroup.position.set(zoneData.guidePos.x, zoneData.guidePos.y, zoneData.guidePos.z);
+            }
+
+            // 3. Update HUD Titles & Progress
+            document.getElementById('hud-zone-title').innerText = zoneData.shortTitle;
+            document.getElementById('progress-text').innerText = `Lokasi ${zoneIdx + 1} dari ${ZONES_DATA.length}`;
+            const pct = ((zoneIdx + 1) / ZONES_DATA.length) * 100;
+            document.getElementById('progress-bar-fill').style.width = `${pct}%`;
+
+            // 4. Update Dialogue Speech
+            const dialogueBox = document.getElementById('guide-dialogue-box');
+            dialogueBox.classList.remove('opacity-0', 'translate-y-4');
+            document.getElementById('dialogue-text').innerText = `Wilujeng sumping di ${zoneData.shortTitle}! Mangga baca informasi ngeunaan wewengkon ieu sateuacan ngamimiti tantangan.`;
+
+            // 5. Show Literacy Modal after short camera pan delay
+            setTimeout(() => {
+                showLiteracyModal(zoneData);
+            }, 1200);
+        }
+
+        function showLiteracyModal(zoneData) {
+            document.getElementById('literacy-zone-num').innerText = zoneData.id;
+            document.getElementById('literacy-title').innerText = zoneData.literacyTitle;
+            document.getElementById('literacy-content').innerHTML = zoneData.literacyText;
+
+            const modalLiteracy = document.getElementById('modal-literacy');
+            modalLiteracy.classList.remove('opacity-0', 'pointer-events-none');
+        }
+
+        function startQuizForCurrentZone() {
+            playSound('click');
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+
+            // Hide Literacy Modal
+            const modalLiteracy = document.getElementById('modal-literacy');
+            modalLiteracy.classList.add('opacity-0', 'pointer-events-none');
+
+            // Open Quiz Modal
+            renderQuestion();
+            const modalQuiz = document.getElementById('modal-quiz');
+            modalQuiz.classList.remove('opacity-0', 'pointer-events-none');
+            gameState.isQuizActive = true;
+        }
+
+        /* ==========================================================================
+           5. QUIZ ENGINE & SCORING SYSTEM
+           ========================================================================== */
+        function renderQuestion() {
+            gameState.answeredCurrentQuestion = false;
+
+            const currentZone = ZONES_DATA[gameState.currentZoneIndex];
+            // Determine question index within zone (0 or 1)
+            const qInZoneIndex = gameState.currentQuestionIndex % 2;
+            const qData = currentZone.questions[qInZoneIndex];
+
+            // Update UI
+            document.getElementById('quiz-question-num').innerText = `Soal ${gameState.currentQuestionIndex + 1} tina 10`;
+            document.getElementById('quiz-question-text').innerText = qData.question;
+
+            // Render Options
+            const container = document.getElementById('quiz-options-container');
+            container.innerHTML = '';
+
+            const optionPrefixes = ['A', 'B', 'C', 'D'];
+            qData.options.forEach((optText, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left p-4 rounded-2xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 font-medium text-slate-700 transition-all flex items-start gap-3 group";
+                btn.onclick = () => handleAnswer(idx, qData.key, qData.explanation);
+                btn.innerHTML = `
+                    <span class="w-7 h-7 rounded-lg bg-slate-100 group-hover:bg-emerald-500 group-hover:text-white text-slate-600 font-bold flex items-center justify-center text-xs shrink-0 transition-colors">${optionPrefixes[idx]}</span>
+                    <span class="text-sm leading-relaxed">${optText}</span>
+                `;
+                container.appendChild(btn);
+            });
+
+            // Reset Feedback & Next Button
+            const feedbackBox = document.getElementById('quiz-feedback');
+            feedbackBox.className = "hidden p-4 rounded-2xl border text-sm space-y-1 transition-all";
+            
+            const nextBtn = document.getElementById('btn-next-question');
+            nextBtn.disabled = true;
+            nextBtn.className = "bg-slate-300 text-slate-500 font-bold px-6 py-2.5 rounded-xl text-sm flex items-center gap-2 transition-all cursor-not-allowed";
+        }
+
+        function handleAnswer(selectedIndex, correctIndex, explanation) {
+            // Guard against duplicate answering
+            if (gameState.answeredCurrentQuestion) return;
+            gameState.answeredCurrentQuestion = true;
+
+            const container = document.getElementById('quiz-options-container');
+            const buttons = container.querySelectorAll('button');
+
+            // Disable all option buttons
+            buttons.forEach((btn, idx) => {
+                btn.disabled = true;
+                btn.classList.add('cursor-default');
+                if (idx === correctIndex) {
+                    btn.className = "w-full text-left p-4 rounded-2xl border-2 border-emerald-500 bg-emerald-100/70 font-semibold text-emerald-900 flex items-start gap-3";
+                } else if (idx === selectedIndex) {
+                    btn.className = "w-full text-left p-4 rounded-2xl border-2 border-rose-400 bg-rose-50 font-medium text-rose-900 flex items-start gap-3";
+                }
+            });
+
+            const feedbackBox = document.getElementById('quiz-feedback');
+            const feedbackTitle = document.getElementById('feedback-title');
+            const feedbackDesc = document.getElementById('feedback-desc');
+            feedbackBox.classList.remove('hidden');
+
+            if (selectedIndex === correctIndex) {
+                // Correct Answer (+100 Poin)
+                playSound('correct');
+                gameState.score += 100;
+                gameState.correctCount += 1;
+
+                feedbackBox.classList.add('bg-emerald-50', 'border-emerald-300', 'text-emerald-900');
+                feedbackTitle.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-600 text-lg"></i> Hébat! Jawaban anjeun leres!`;
+                feedbackDesc.innerText = explanation;
+
+                // Speech dialogue feedback
+                document.getElementById('dialogue-text').innerText = "Hébat! Jawaban anjeun leres pisan!";
+            } else {
+                // Wrong Answer
+                playSound('wrong');
+                gameState.wrongCount += 1;
+
+                feedbackBox.classList.add('bg-rose-50', 'border-rose-300', 'text-rose-900');
+                feedbackTitle.innerHTML = `<i class="fa-solid fa-circle-xmark text-rose-600 text-lg"></i> Can leres! Hayu diajar deui!`;
+                feedbackDesc.innerText = explanation;
+
+                document.getElementById('dialogue-text').innerText = "Can leres! Ulah patah semangat, hayu diajar deui!";
+            }
+
+            // Update HUD Score Display
+            document.getElementById('hud-score').innerText = `${gameState.score} / 1000`;
+
+            // Enable Next Button
+            const nextBtn = document.getElementById('btn-next-question');
+            nextBtn.disabled = false;
+            nextBtn.className = "gradient-btn text-white font-bold px-6 py-2.5 rounded-xl text-sm flex items-center gap-2 transition-all shadow-md cursor-pointer";
+        }
+
+        function nextQuestion() {
+            playSound('click');
+            gameState.currentQuestionIndex += 1;
+
+            // Check if end of game (10 questions complete)
+            if (gameState.currentQuestionIndex >= 10) {
+                finishGame();
+                return;
+            }
+
+            // Check if zone changed (every 2 questions)
+            if (gameState.currentQuestionIndex % 2 === 0) {
+                // Hide Quiz Modal & Move to next Zone
+                const modalQuiz = document.getElementById('modal-quiz');
+                modalQuiz.classList.add('opacity-0', 'pointer-events-none');
+                
+                loadZone(Math.floor(gameState.currentQuestionIndex / 2));
+            } else {
+                // Render next question in same zone
+                renderQuestion();
+            }
+        }
+
+        /* ==========================================================================
+           6. SUMMARY SCREEN & BADGE ACHIEVEMENTS
+           ========================================================================== */
+        function finishGame() {
+            // Hide Quiz & HUD Overlay
+            document.getElementById('modal-quiz').classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('hud-top').classList.add('opacity-0');
+            document.getElementById('hud-bottom').classList.add('opacity-0');
+
+            // Calculate Title & Badge
+            const score = gameState.score;
+            let title = "";
+            let badgeIcon = "";
+            let badgeColorClass = "";
+
+            if (score >= 900) {
+                title = "DUTA BUDAYA SUNDA";
+                badgeIcon = "🥇";
+            } else if (score >= 700) {
+                title = "AHLI BUDAYA SUNDA";
+                badgeIcon = "🥈";
+            } else if (score >= 500) {
+                title = "PENJELAJAH HEBAT";
+                badgeIcon = "🥉";
+            } else if (score >= 300) {
+                title = "WISATAWAN PINTER";
+                badgeIcon = "🎗️";
+            } else {
+                title = "CALON DUTA BUDAYA";
+                badgeIcon = "🌱";
+            }
+
+            // Populate Summary Modal
+            document.getElementById('summary-badge-icon').innerText = badgeIcon;
+            document.getElementById('summary-badge-title').innerText = title;
+            document.getElementById('summary-student-display').innerText = `Wilujeng ka ${gameState.studentName}!`;
+            document.getElementById('summary-total-score').innerText = gameState.score;
+            document.getElementById('summary-correct-count').innerText = `${gameState.correctCount} / 10`;
+            document.getElementById('summary-wrong-count').innerText = gameState.wrongCount;
+            
+            const accuracy = Math.round((gameState.correctCount / 10) * 100);
+            document.getElementById('summary-accuracy').innerText = `${accuracy}%`;
+
+            // Show Summary Screen
+            const modalSummary = document.getElementById('modal-summary');
+            modalSummary.classList.remove('opacity-0', 'pointer-events-none');
+        }
+
+        function restartGame() {
+            playSound('click');
+            // Reset state
+            gameState.currentZoneIndex = 0;
+            gameState.currentQuestionIndex = 0;
+            gameState.score = 0;
+            gameState.correctCount = 0;
+            gameState.wrongCount = 0;
+
+            // Hide Summary
+            document.getElementById('modal-summary').classList.add('opacity-0', 'pointer-events-none');
+            
+            // Show Start Screen
+            document.getElementById('modal-start').classList.remove('opacity-0', 'pointer-events-none');
+        }
+
+        function printCertificate() {
+            playSound('click');
+            const printWindow = window.open('', '_blank');
+            const htmlContent = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Sertifikat Pencapaian - Kampung Adat Naga</title>
+                    <style>
+                        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 40px; background: #f8fafc; }
+                        .cert { border: 10px double #059669; padding: 40px; background: white; max-w: 800px; margin: auto; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+                        h1 { color: #047857; font-size: 32px; margin-bottom: 5px; }
+                        h2 { color: #1e293b; font-size: 24px; margin-top: 20px; }
+                        .badge { font-size: 20px; color: #d97706; font-weight: bold; margin: 15px 0; }
+                        .score { font-size: 18px; color: #334155; }
+                        .footer { margin-top: 40px; font-size: 12px; color: #94a3b8; }
+                    </style>
+                </head>
+                <body>
+                    <div class="cert">
+                        <h1>SERTIFIKAT PENCAPAIAN</h1>
+                        <p>Jelajah Kampung Adat Naga 3D Adventure</p>
+                        <hr style="border: 1px solid #10b981; margin: 20px 0;">
+                        <p>Diberikan Kepada Siswa:</p>
+                        <h2>${gameState.studentName}</h2>
+                        <p>Atas keberhasilan menyelesaikan petualangan edukasi budaya Sunda dengan gelar:</p>
+                        <div class="badge">🏆 ${document.getElementById('summary-badge-title').innerText} 🏆</div>
+                        <div class="score">Total Skor: <b>${gameState.score} Poin</b> | Akurasi: <b>${Math.round((gameState.correctCount / 10) * 100)}%</b></div>
+                        <div class="footer">Diterbitkan secara otomatis oleh Media Pembelajaran Bahasa Sunda Kelas VIII</div>
+                    </div>
+                    <script>window.print();<\/script>
+                </body>
+                </html>
+            `;
+            printWindow.document.write(htmlContent);
+            printWindow.document.close();
+        }
+
+        /* Initialize 3D Graphics on Window Load */
+        window.onload = function() {
+            init3D();
+        };
+    </script>
+</body>
+</html>
